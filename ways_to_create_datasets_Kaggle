@@ -1,0 +1,458 @@
+
+
+https://www.tensorflow.org/datasets/gcs
+
+# --------------------------------------------------
+# Ways to create Datasets
+# --------------------------------------------------
+
+!pip install Wikipedia-API
+
+# --------------------------------------------------
+
+import numpy as np
+import pandas as pd
+
+# https://pypi.org/project/Wikipedia-API/
+import wikipediaapi
+
+import regex
+
+import tensorflow as tf
+import tensorflow_datasets as tfds
+
+# --------------------------------------------------
+
+# Subfunctions
+
+# --------------------------------------------------
+
+def get_next_break_char_index(text_temp):
+    temp = [text_temp.find('\n'), text_temp.find('.')]
+    out = np.sort(temp)
+    # print('out: ', out)
+    
+    foundvals = [i for i in out if i > -1]
+    if any(foundvals):
+        ender = min(foundvals)
+    else:
+        ender = len(text_temp)  # no values found
+    # print('ender: ', ender)
+    
+    return ender
+
+# --------------------------------------------------
+
+# Transform plain character text to a sentence array, where each sentence is in a nested array.
+def text_2_sentences(text):
+    flag = 0
+    ender = -1
+    ender_b4 = ender+1
+    text_temp = text # a temporary variable to not copy over text
+    
+    sen = []
+    while ender_b4 < len(text_temp):
+        ender_b4 = ender+1
+        # print('ender_b4: ', ender_b4)
+        
+        ender = get_next_break_char_index(text_temp[ender_b4::]) + ender_b4
+        # print('ender: ', ender)
+        
+        sen.append(text_temp[ender_b4:ender])
+        # print('sen: ', sen)
+    
+    # Remove empty nested arrays 
+    sen = [i for i in sen if any(i)]
+    # print('sen: ', sen)
+
+    return sen
+
+# --------------------------------------------------
+
+# Dataset 0: for BERTopic classification (inverse zero-shot)
+
+## Determine if sentences are: breakfast, lunch, dinner
+
+# --------------------------------------------------
+
+wiki_wiki = wikipediaapi.Wikipedia('MyProjectName', 'en', extract_format=wikipediaapi.ExtractFormat.WIKI)
+p_wiki = wiki_wiki.page("Breakfast")
+breafast_text = p_wiki.text
+print('breafast_text: ', breafast_text)
+
+# --------------------------------------------------
+
+wiki_wiki = wikipediaapi.Wikipedia('MyProjectName', 'en', extract_format=wikipediaapi.ExtractFormat.WIKI)
+p_wiki = wiki_wiki.page("Lunch")
+lunch_text = p_wiki.text
+print('lunch_text: ', lunch_text)
+
+# --------------------------------------------------
+
+wiki_wiki = wikipediaapi.Wikipedia('MyProjectName', 'en', extract_format=wikipediaapi.ExtractFormat.WIKI)
+
+p_wiki = wiki_wiki.page("Dinner")
+dinner_text = p_wiki.text
+print('dinner_text: ', dinner_text)
+
+# --------------------------------------------------
+
+breafast_sentences = text_2_sentences(breafast_text)
+lunch_sentences = text_2_sentences(lunch_text)
+dinner_sentences = text_2_sentences(dinner_text)
+
+
+# Concatenate sentences and labels
+sentences = breafast_sentences + lunch_sentences + dinner_sentences
+
+labels = ['breafast']*len(breafast_sentences) + ['lunch']*len(lunch_sentences) + ['dinner']*len(dinner_sentences)
+
+# --------------------------------------------------
+
+print('len(sentences): ', len(sentences), ', len(labels): ', len(labels))
+
+# --------------------------------------------------
+
+# --------------------------------------------------
+# Lightly clean data
+# --------------------------------------------------
+
+X = []
+Y = []
+
+for i in range(len(sentences)):
+    
+    sen_str = sentences[i]
+    y_str = labels[i]
+    
+    # ----------------------------
+    # Clean/pre-process the sentence
+    # ----------------------------
+    # [Step 0] Make sentences lowercase
+    sen_str = sen_str.lower()
+    
+    # [Step 1] Remove parentheses and text in between parentheses, so that phrases are gramatically correct
+    sen_str = regex.sub("(\(.*?\))", "", sen_str)
+    sen_str = regex.sub("(\{.*?\})", "", sen_str)
+    sen_str = regex.sub("(\[.*?\])", "", sen_str)
+    
+    # [Step 2] Remove long undesireable characters repeatively, matching characters in the string
+    # These words should be unique words, such that parts of other words are not be modified 
+    undesireable_chars = ['</p>', '<a', 'id=', "href=", 'title=', 'class=', '</a>', 
+                          '</sup>', '<p>', '</b>', '<sup']
+    for word in undesireable_chars:
+        sen_str = regex.sub(r"\b" + word + r"\b", '', sen_str)
+    
+    # [Step 3] Finally remove all multiple spaces, and replace with a single space
+    sen_str = regex.sub(r'\s+', ' ', sen_str)
+    
+    # ----------------------------
+        
+    # [1] Remove sentences with less than 10 words. Narrow the sentences down to realistic sentences.
+    if (len(sen_str.split()) > 10) & (len(y_str) > 0):
+        X.append(sen_str)
+        Y.append(y_str)
+
+# --------------------------------------------------
+
+## Put in Pandas DataFrame
+
+df = pd.DataFrame(X, columns=['X'])
+df = pd.concat([df, pd.Series(Y)], axis=1)
+df.columns = ['X', 'Y']
+df
+
+# --------------------------------------------------
+
+save_dataset_name = 'BLD_dataset.csv'
+
+# Save csv
+df.to_csv(save_dataset_name, index=False)
+
+# --------------------------------------------------
+
+## Tensorflow Datasets
+
+## Way 0: with command line tool
+
+!rm -rf BLD_dataset
+
+# --------------------------------------------------
+
+# Create a folder and python file called BLD_dataset/BLD_dataset.py
+!tfds new BLD_dataset
+
+
+# Dataset generated at /kaggle/working/BLD_dataset
+# You can start searching `TODO(BLD_dataset)` to complete the implementation.
+# Please check https://www.tensorflow.org/datasets/add_dataset for additional details.
+# Open BLD_dataset.py and modify manually
+# --------------------------------------------------
+
+"""BLD_dataset dataset. Inside BLD_dataset_dataset_builder.py"""
+
+import tensorflow_datasets as tfds
+
+
+class Builder(tfds.core.GeneratorBasedBuilder):
+  """DatasetBuilder for BLD_dataset dataset."""
+
+  VERSION = tfds.core.Version('1.0.0')
+  RELEASE_NOTES = {
+      '1.0.0': 'Initial release.',
+  }
+
+  def _info(self) -> tfds.core.DatasetInfo:
+    """Returns the dataset metadata."""
+    # TODO(BLD_dataset): Specifies the tfds.core.DatasetInfo object
+    return self.dataset_info_from_configs(
+        features=tfds.features.FeaturesDict({
+            # These are the features of your dataset like images, labels ...
+            'image': tfds.features.Image(shape=(None, None, 3)),
+            'label': tfds.features.ClassLabel(names=['no', 'yes']),
+        }),
+        # If there's a common (input, target) tuple from the
+        # features, specify them here. They'll be used if
+        # `as_supervised=True` in `builder.as_dataset`.
+        supervised_keys=('image', 'label'),  # Set to `None` to disable
+        homepage='https://dataset-homepage/',
+    )
+
+  def _split_generators(self, dl_manager: tfds.download.DownloadManager):
+    """Returns SplitGenerators."""
+    # TODO(BLD_dataset): Downloads the data and defines the splits
+    path = dl_manager.download_and_extract('https://todo-data-url')
+
+    # TODO(BLD_dataset): Returns the Dict[split names, Iterator[Key, Example]]
+    return {
+        'train': self._generate_examples(path / 'train_imgs'),
+    }
+
+  def _generate_examples(self, path):
+    """Yields examples."""
+    # TODO(BLD_dataset): Yields (key, example) tuples from the dataset
+    for f in path.glob('*.jpeg'):
+      yield 'key', {
+          'image': f,
+          'label': 'yes',
+      }
+
+# --------------------------------------------------
+
+# One needs to be in the dataset directory, 
+# Download and prepare the dataset for model usage
+!tfds build /kaggle/working/BLD_dataset
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+## Way 1: TfDataBuilder
+
+https://www.tensorflow.org/datasets/format_specific_dataset_builders
+
+# --------------------------------------------------
+
+def encode_labels(labels):
+    
+    unq_labels = list(set(labels))
+    NUM_OF_CLASSES = len(unq_labels)
+    
+    # Assign a number to each unique label
+    y_assignment = dict(zip(unq_labels, np.arange(NUM_OF_CLASSES)))
+    print('y_assignment ', y_assignment)
+
+    label_sequences = [y_assignment[i] for i in labels]
+    
+    return label_sequences, y_assignment
+
+# --------------------------------------------------
+
+label_sequences, y_assignment = encode_labels(Y)
+
+# --------------------------------------------------
+
+# Make test and train datasets
+TRAINING_SPLIT = 0.7
+
+train_size = int(TRAINING_SPLIT*len(X))
+X_train = [X[i] for i in range(train_size)]
+Y_train = [label_sequences[i] for i in range(train_size)]
+
+X_test = [X[i] for i in range(train_size, len(X))]
+Y_test = [label_sequences[i] for i in range(train_size, len(label_sequences))]
+
+# --------------------------------------------------
+
+Y_train = tf.convert_to_tensor(Y_train, dtype=tf.int32)
+Y_test = tf.convert_to_tensor(Y_test, dtype=tf.int32)
+
+# --------------------------------------------------
+
+idx_train = tf.convert_to_tensor([i for i in range(len(X_train))], dtype=tf.int32)
+idx_test = tf.convert_to_tensor([i for i in range(len(X_test))], dtype=tf.int32)
+
+# --------------------------------------------------
+
+data_dict_train = {"idx": idx_train,
+            "label": Y_train,
+            "sentence": X_train}
+
+data_dict_test = {"idx": idx_test,
+            "label": Y_test,
+            "sentence": X_test}
+
+# --------------------------------------------------
+
+ds_train = tf.data.Dataset.from_tensor_slices(data_dict_train)
+ds_test = tf.data.Dataset.from_tensor_slices(data_dict_test)
+
+# --------------------------------------------------
+
+!rm -rf BLD_dataset
+!mkdir BLD_dataset
+
+# --------------------------------------------------
+
+# Make the Dataset locally
+
+# Define the builder.
+single_number_builder = tfds.dataset_builders.TfDataBuilder(
+    name="BLD_dataset",
+    config="single_number",
+    version="1.0.0",
+    data_dir="/kaggle/working/BLD_dataset",
+    split_datasets={
+        "train": ds_train,
+        "test": ds_test,
+    },
+    features=tfds.features.FeaturesDict({
+        'idx': tf.int32,
+        'label': tfds.features.ClassLabel(num_classes=3),
+        'sentence': tfds.features.Text(),
+    }),
+    description="Breakfast Lunch Dinner (BLD) dataset.",
+    release_notes={
+        "1.0.0": "Notes",
+    }
+)
+
+# Make the builder store the data as a TFDS dataset.
+single_number_builder.download_and_prepare()
+
+# --------------------------------------------------
+
+BLD_dataset
+
+# --------------------------------------------------
+
+# If I type BLD_dataset, it should print
+
+# {'train': <_PrefetchDataset element_spec={'idx': TensorSpec(shape=(None,), 
+#                     dtype=tf.int32, name=None), 'label': TensorSpec(shape=(None,), 
+#                     dtype=tf.int64, name=None), 'sentence1': TensorSpec(shape=(None,), 
+#                     dtype=tf.string, name=None), 'sentence2': TensorSpec(shape=(None,), 
+#                     dtype=tf.string, name=None)}>,
+
+#  'validation': <_PrefetchDataset element_spec={'idx': TensorSpec(shape=(None,), dtype=tf.int32, name=None), 'label': TensorSpec(shape=(None,), dtype=tf.int64, name=None), 'sentence1': TensorSpec(shape=(None,), dtype=tf.string, name=None), 'sentence2': TensorSpec(shape=(None,), dtype=tf.string, name=None)}>,
+#  'test': <_PrefetchDataset element_spec={'idx': TensorSpec(shape=(None,), dtype=tf.int32, name=None), 'label': TensorSpec(shape=(None,), dtype=tf.int64, name=None), 'sentence1': TensorSpec(shape=(None,), dtype=tf.string, name=None), 'sentence2': TensorSpec(shape=(None,), dtype=tf.string, name=None)}>}
+
+# --------------------------------------------------
+
+# If the TFDS was stored in a custom folder, then it can be loaded as follows:
+custom_data_dir = "/kaggle/working/BLD_dataset"
+
+ds_train = tfds.load("/BLD_dataset/single_number/1.0.0", 
+                     split="train", 
+                    data_dir=custom_data_dir
+                    )
+
+# --------------------------------------------------
+
+
+info.features
+
+# FeaturesDict({
+#     'idx': int32,
+#     'label': ClassLabel(shape=(), dtype=int64, num_classes=2),
+#     'sentence1': Text(shape=(), dtype=string),
+#     'sentence2': Text(shape=(), dtype=string),
+# })
+
+# --------------------------------------------------
+
+# View the dataset
+list(ds_train2.take(1).as_numpy_iterator())
+
+example_batch = next(iter(ds_train2))
+example_batch
+
+example_batch.items()
+
+# One should be able to view the data using dataset iteration
+for key, value in example_batch.items():
+    print(f"{key:9s}: {value.numpy()}")
+    
+    
+# It should look like this:
+# idx      : 1680
+# label    : 0
+# sentence1: b'Text text.'
+# sentence2: b'Text text .'
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+## HuggingFace Datasets
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+# Dataset 1: for sentence translation (English to/from French)
+
+## B-L-D: (Breakfast - Lunch - Dinner) to/from PD-D-D (Petit Dejeuner - Dejeuner - Diner)
+# --------------------------------------------------
+
+wiki_wiki = wikipediaapi.Wikipedia('MyProjectName', 'fr',
+        extract_format=wikipediaapi.ExtractFormat.WIKI)
+
+p_wiki = wiki_wiki.page("Diner")
+breafast_text = p_wiki.text
+print('diner_text: ', breafast_text)
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
+
+
+# --------------------------------------------------
