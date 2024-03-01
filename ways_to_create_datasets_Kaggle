@@ -169,6 +169,107 @@ save_dataset_name = 'BLD_dataset.csv'
 # Save csv
 df.to_csv(save_dataset_name, index=False)
 
+
+# -------------------------------------------------
+# Put Datasets on GCP Storage: https://console.cloud.google.com/
+# -------------------------------------------------
+# Determine what project to put the files
+gcloud projects list
+
+PROJECT_ID="text-pr0cessing"
+
+# Set the project
+gcloud config set project $PROJECT_ID
+
+# ---------------------------------------------
+
+# Create Storage Bucket
+BUCKET_NAME="bld-dataset"
+
+LOCATION="europe-west9"
+gcloud storage buckets create gs://$BUCKET_NAME --project=$PROJECT_ID --default-storage-class=STANDARD --location=$LOCATION --uniform-bucket-level-access
+
+
+// Dataset is on Kaggle
+// Get service account permission to copy dataset to GCP Storage
+
+// ---------
+// On GCP: set up the service account key
+// ---------
+# List service accounts
+gcloud iam service-accounts list
+
+# There are no service accounts set up for text-pr0cessing, so set one up
+export SERVICE_ACCOUNT_EMAIL=$(echo "j622amilah@gmail.com")
+export SERVICE_ACCOUNT_ID=$(echo "GCP-login")
+export SERVICE_ACCOUNT=$SERVICE_ACCOUNT_ID@$PROJECT_ID.iam.gserviceaccount.com
+
+# Create a custom service account
+gcloud iam service-accounts create $SERVICE_ACCOUNT_ID --description="Creating a service account for GCP Storage" --display-name="GCP-login"
+
+# Add the role to access Storage objects
+gcloud projects add-iam-policy-binding $PROJECT_ID --member=serviceAccount:$SERVICE_ACCOUNT --role="roles/storage.objectAdmin"
+
+# Create a service account key
+# https://cloud.google.com/sdk/gcloud/reference/iam/service-accounts/keys/create
+gcloud iam service-accounts keys create key.json --iam-account=$SERVICE_ACCOUNT
+
+cat key.json
+
+copy-paste text inside key.json
+
+clear
+
+
+
+// ---------
+// On Kaggle
+// ---------
+%%bash --err null
+cat > key.json <<EOF
+{
+  "type": "service_account",
+  "project_id": "text-pr0cessing",
+  "private_key_id": "8f7672ccfab3caccbe6d72a0f38e431aa9a56f46",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCVSisSyHVzGSvs\nWyv7Qdz2UyXAvrGB8VyqMeK4tjSKTUwSN39vGCdJRK1eCNoKnwSobXwBpG1mDvFS\n2kd3XoXerDKpCXL0clpTCgPz7MEAGLMRy/qHgIBKhQEXYgrOy/KmbDoHtTLyAkVz\n08f0rGJzoF/DdxOrznfeibMVEnjIEXWsizfYKpbYnjMJ0W/QF8YRa4grTW43CKqY\nseI2/vDEP9MHJdniwMhl6vv5wnWtVPas6Y7zh1/9MOjfrQCgyNhrygCs6n074RRq\nOhdu7ixrYQNJJAMBmtqou300/SKI9M7vujuWpi8YT/JCC3aosRN/TpPySercFCho\nHYwTK2E3AgMBAAECggEAM9qgrnQBU5q1JnIeizW71bVYwiOaTVu0B4uvR+BFzJn/\np74uHbzifHEF1Mk3TwQf3o60yW8+7nmXOeOGekBTOF5QdGVLT/veQsSSTen4uZta\nq35RxToNlZSwJdqQjXbKkCK8X0wBZ40BabNwWxx7T9UvHhogs4bSHPJwSQvy9u6N\nut2rKtKt9/j39mo30CCz0dD3wYL6DsgXSElHqUekQJrY3xbDgERLuODtmPMGREUs\n5nasQcS7OccLn3EbkPf6kOvvDT4gOP+aWL1igGDXjcqLaldVltPA9MJwqpGBnkV3\n3VC8tuv66zg0HNP3mfhxzxABBUqG11zlzdh5HUUxjQKBgQDIc6tlP1bpDaN2ax7Q\n4OTzc3rVkOAQLuar+2VnhjfCIASfn6GVYDKoSQcD5x+lfOjR4QTKW3MXOGzCkDXu\n5lFHZm/TNFR7A9TvwwLqKVFFSPThyIzQu0NmkZkQrngIl5v23dT0gIra49PlPTSH\nqrvNI3TKZTUE42fvU/hGo0JexQKBgQC+qPzQjN+/jen5qjehlxXaek3GZYR3SZyD\no9ff+7Z+HtFl44I8l6e0ayIkqjQdnuStX3Jo5l0AXcWItrUEpfnoeLQHRwLjTsWn\njys4NK2WUZTplR4VI9cmQwMfDooMKcdkMst8BoR7RBku0ZFdu5miEJgXqbsAWDvL\nSUH3TtT/ywKBgBjUayixfdyEefkTL9AD65hUd6S4u2iFxsEK9Par44BCYxA6v9M3\nBU9fLGVJXdwr6tMEoolGZq07qg03u9aJ5QuJHtT0qHpMcTX53ASRdaW1cc/9/aNl\nbuXnpyQv2GKIFSOxOs3Glmyix/6fZEBh3717ZN4lRzoByUAWEKz/UBtZAoGANZ9R\ne1Yjl7xSEeXNv6S+gLPlK+dhWitZ2aw7CsPAj7gbLIzQFDqS8Csxbx5vieUma5xs\nkRQ5E+FLrSe1wZjssHVCLMnMBiIhdP7PKP+n0p8fQpKt40QxPpGaTyHHsaQOcB/Z\nGwi6OfDtJD3MpJAepXYFUKJr9azbJFF2PBfv0AECgYBdMeT6BBsCFBPy2vuet4TA\nC5pJD1NJfVjzL/A61sCl0EY7YLi9DfMNZVi6nNCV/GmaVpAiOwEH4iIj4E7hx+O/\nl4d8+1fSyjA4vE2oZ0GzG0wWOcXJzNOxBIjhJz7opIMXkLKu5Bm0N7aSeGd+NM2c\nkVOUxrpFjXVKSaM7NdJKiA==\n-----END PRIVATE KEY-----\n",
+  "client_email": "GCP-login@text-pr0cessing.iam.gserviceaccount.com",
+  "client_id": "105421319658417088530",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/GCP-login%40text-pr0cessing.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
+EOF
+# Copy-past service account key
+
+!gcloud auth login --quiet --cred-file=key.json --force --project text-pr0cessing
+
+!gcloud config set project text-pr0cessing --quiet
+
+# Upload file to storage
+!gcloud storage cp BLD_dataset.csv gs://bld-dataset
+
+// ---------
+// On GCP: verify that dataset is present
+// ---------
+gcloud storage ls --recursive gs://$BUCKET_NAME/**
+
+# Make all objects in a bucket publicly readable
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET_NAME --member=allUsers --role=roles/storage.objectViewer
+
+
+# ---------------------------------------------
+
+# Check if the image can be viewed in the browser
+https://storage.googleapis.com/bld-dataset/BLD_dataset.csv
+
+
+# Use storage path to refer to image
+gs://bld-dataset/BLD_dataset.csv
+
+
+
 # --------------------------------------------------
 
 ## Tensorflow Datasets
